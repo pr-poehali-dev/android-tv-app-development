@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '@/components/ui/icon';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,30 +21,73 @@ interface Movie {
   image: string;
   category: string;
   quality: string;
+  description?: string;
 }
 
-const mockMovies: Movie[] = [
-  { id: 1, title: 'Невероятные приключения Шурика', year: '2025', rating: '8.2', image: 'https://via.placeholder.com/300x450/E50914/FFFFFF?text=Шурик', category: 'russian', quality: 'HDRip' },
-  { id: 2, title: 'Горыныч', year: '2025', rating: '7.8', image: 'https://via.placeholder.com/300x450/1F1F1F/FFB800?text=Горыныч', category: 'russian', quality: 'BDRip' },
-  { id: 3, title: 'Позывной: Альфа', year: '2025', rating: '8.5', image: 'https://via.placeholder.com/300x450/E50914/FFFFFF?text=Альфа', category: 'series', quality: 'WEB-DL' },
-  { id: 4, title: 'Ночной администратор', year: '2025', rating: '8.1', image: 'https://via.placeholder.com/300x450/1F1F1F/FFB800?text=Админ', category: 'series', quality: 'HDRip' },
-  { id: 5, title: 'Атака титанов: Финал', year: '2025', rating: '9.1', image: 'https://via.placeholder.com/300x450/E50914/FFFFFF?text=Титаны', category: 'anime', quality: 'WEB-DL' },
-  { id: 6, title: 'Магическая битва', year: '2025', rating: '8.8', image: 'https://via.placeholder.com/300x450/1F1F1F/FFB800?text=Магия', category: 'anime', quality: 'HDRip' },
-  { id: 7, title: 'Дюна: Часть третья', year: '2025', rating: '8.9', image: 'https://via.placeholder.com/300x450/E50914/FFFFFF?text=Дюна', category: 'hdrip', quality: 'HDRip' },
-  { id: 8, title: 'Матрица: Воскрешение 2', year: '2025', rating: '8.3', image: 'https://via.placeholder.com/300x450/1F1F1F/FFB800?text=Матрица', category: 'hdrip', quality: 'BDRip' },
-];
+interface Profile {
+  id: number;
+  name: string;
+  avatar: string;
+}
+
+const API_URL = 'https://functions.poehali.dev/f4237092-11f8-4460-8f80-3f00d829a9c2';
 
 export default function Index() {
   const [activeTab, setActiveTab] = useState('home');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProfile, setSelectedProfile] = useState('profile1');
+  const [selectedProfile, setSelectedProfile] = useState(1);
   const [favorites, setFavorites] = useState<number[]>([]);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const profiles = [
-    { id: 'profile1', name: 'Профиль 1', avatar: '👤' },
-    { id: 'profile2', name: 'Профиль 2', avatar: '👨' },
-    { id: 'profile3', name: 'Профиль 3', avatar: '👩' },
-  ];
+  useEffect(() => {
+    fetchProfiles();
+    fetchMovies();
+  }, []);
+
+  useEffect(() => {
+    if (selectedProfile) {
+      fetchFavorites();
+    }
+  }, [selectedProfile]);
+
+  const fetchProfiles = async () => {
+    try {
+      const response = await fetch(`${API_URL}?path=profiles`);
+      const data = await response.json();
+      setProfiles(data.profiles || []);
+      if (data.profiles && data.profiles.length > 0) {
+        setSelectedProfile(data.profiles[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching profiles:', error);
+    }
+  };
+
+  const fetchMovies = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}?path=movies`);
+      const data = await response.json();
+      setMovies(data.movies || []);
+    } catch (error) {
+      console.error('Error fetching movies:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchFavorites = async () => {
+    try {
+      const response = await fetch(`${API_URL}?path=favorites&profile_id=${selectedProfile}`);
+      const data = await response.json();
+      const favoriteIds = (data.favorites || []).map((m: Movie) => m.id);
+      setFavorites(favoriteIds);
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+    }
+  };
 
   const categories = [
     { id: 'all', label: 'Все', icon: 'Tv' },
@@ -54,19 +97,48 @@ export default function Index() {
     { id: 'anime', label: 'Аниме', icon: 'Sparkles' },
   ];
 
-  const toggleFavorite = (id: number) => {
-    setFavorites(prev =>
-      prev.includes(id) ? prev.filter(fav => fav !== id) : [...prev, id]
-    );
+  const toggleFavorite = async (id: number) => {
+    const isFavorite = favorites.includes(id);
+    
+    try {
+      if (isFavorite) {
+        await fetch(`${API_URL}?path=favorites`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile_id: selectedProfile, movie_id: id })
+        });
+        setFavorites(prev => prev.filter(fav => fav !== id));
+      } else {
+        await fetch(`${API_URL}?path=favorites`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile_id: selectedProfile, movie_id: id })
+        });
+        setFavorites(prev => [...prev, id]);
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+    }
   };
 
-  const filteredMovies = mockMovies.filter(movie => {
+  const filteredMovies = movies.filter(movie => {
     const matchesSearch = movie.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = activeTab === 'home' || activeTab === 'categories' || movie.category === activeTab;
     return matchesSearch && matchesCategory;
   });
 
-  const favoriteMovies = mockMovies.filter(movie => favorites.includes(movie.id));
+  const favoriteMovies = movies.filter(movie => favorites.includes(movie.id));
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Icon name="Loader2" size={48} className="animate-spin text-primary mx-auto" />
+          <p className="text-xl text-muted-foreground">Загрузка...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background via-background to-background/95">
@@ -83,13 +155,13 @@ export default function Index() {
               </h1>
             </div>
 
-            <Select value={selectedProfile} onValueChange={setSelectedProfile}>
+            <Select value={String(selectedProfile)} onValueChange={(v) => setSelectedProfile(Number(v))}>
               <SelectTrigger className="w-48 bg-card border-border">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {profiles.map(profile => (
-                  <SelectItem key={profile.id} value={profile.id}>
+                  <SelectItem key={profile.id} value={String(profile.id)}>
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">{profile.avatar}</span>
                       <span>{profile.name}</span>
@@ -139,7 +211,7 @@ export default function Index() {
                 </Button>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {mockMovies.slice(0, 5).map(movie => (
+                {movies.slice(0, 5).map(movie => (
                   <Card 
                     key={movie.id} 
                     className="group relative overflow-hidden bg-card border-border hover:border-primary transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-primary/20 cursor-pointer"
@@ -183,7 +255,7 @@ export default function Index() {
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-foreground">📺 Новые сериалы</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {mockMovies.filter(m => m.category === 'series').map(movie => (
+                {movies.filter(m => m.category === 'series').map(movie => (
                   <Card 
                     key={movie.id} 
                     className="group relative overflow-hidden bg-card border-border hover:border-primary transition-all duration-300 hover:scale-105 hover:shadow-2xl hover:shadow-primary/20 cursor-pointer"
@@ -298,7 +370,7 @@ export default function Index() {
             <div className="space-y-6">
               <h2 className="text-2xl font-bold text-foreground">Все фильмы и сериалы</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {mockMovies.map(movie => (
+                {movies.map(movie => (
                   <Card 
                     key={movie.id} 
                     className="group relative overflow-hidden bg-card border-border hover:border-primary transition-all duration-300 hover:scale-105 cursor-pointer"

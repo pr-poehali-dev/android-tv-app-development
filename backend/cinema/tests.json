@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Get all movies",
+      "method": "GET",
+      "path": "/?path=movies",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "movies": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get profiles",
+      "method": "GET",
+      "path": "/?path=profiles",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "profiles": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get favorites for profile",
+      "method": "GET",
+      "path": "/?path=favorites&profile_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "favorites": "array"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
